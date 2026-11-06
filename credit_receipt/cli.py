@@ -1,6 +1,7 @@
 """Command-line interface for local, evidence-backed reconciliation."""
 
 import argparse
+import csv
 import json
 import os
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 
 from .audit import audit
 from .input import InputError, load_bundle
+from .workbuddy import EVENT_FIELDS, read_workbuddy
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -20,8 +22,33 @@ def main(argv: list[str] | None = None) -> int:
     audit_command = commands.add_parser("audit", help="reconcile balances and per-task credit debits")
     audit_command.add_argument("directory", type=Path, help="directory containing canonical input files")
     audit_command.add_argument("--output", type=Path, help="write detailed local JSON report")
+    import_command = commands.add_parser("workbuddy-import", help="import a local WorkBuddy request-usage XLSX")
+    import_command.add_argument("file", type=Path)
+    import_command.add_argument("--utc-offset", required=True, help="verified source wall-clock offset, e.g. +08:00")
+    import_command.add_argument("--output-dir", required=True, type=Path, help="new private output directory")
     args = parser.parse_args(argv)
     try:
+        if args.command == "workbuddy-import":
+            imported = read_workbuddy(args.file, args.utc_offset)
+            target = args.output_dir.resolve()
+            if target.exists():
+                raise InputError("output directory already exists; choose a new path")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.TemporaryDirectory(prefix=".credit-receipt-", dir=target.parent) as temporary:
+                staging = Path(temporary) / "result"
+                staging.mkdir()
+                with (staging / "events.csv").open("w", encoding="utf-8", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=EVENT_FIELDS)
+                    writer.writeheader()
+                    writer.writerows(imported.events)
+                (staging / "summary.json").write_text(
+                    json.dumps(imported.summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+                )
+                os.replace(staging, target)
+            print(f"observed_only: {imported.summary['charged_requests']} charged, "
+                  f"{imported.summary['zero_credit_requests']} zero-credit requests; "
+                  "balance, token usage and cash value unavailable")
+            return 0
         bundle = load_bundle(args.directory)
         report = audit(bundle)
         if args.output:

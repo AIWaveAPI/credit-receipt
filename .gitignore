@@ -10,5 +10,7 @@ dist/
 .env.*
 audit-report.json
 report.json
+summary.json
 *.csv
+*.xlsx
 !examples/synthetic-runway/*.csv

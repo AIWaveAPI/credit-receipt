@@ -35,7 +35,7 @@ Place these files in one directory. See [the complete data contract](docs/design
 | `rules.json` | Dated, sourced credit rates for matching model + operation + unit |
 | `snapshots.csv` | Optional provider balance observations; a snapshot after the last event is required for a fully closed reconciliation |
 
-The current version accepts **normalized user-owned records**. It does not claim to parse any provider's native export. If a provider supplies only a balance or a task-level credit deduction, leave unavailable usage or rules blank. The tool will say `insufficient_data`, not invent a token count. Inputs have [explicit size and precision limits](docs/design.md) so malformed files cannot silently expand into implausible calculations.
+The audit command accepts **normalized user-owned records**. A separate `workbuddy-import` command reads the five-column WorkBuddy XLSX request-usage export. If a provider supplies only a balance or a task-level credit deduction, leave unavailable usage or rules blank. The tool will say `insufficient_data`, not invent a token count. Inputs have [explicit size and precision limits](docs/design.md) so malformed files cannot silently expand into implausible calculations.
 
 ## Three answers, with evidence
 
@@ -58,7 +58,14 @@ Process exit codes: `0` fully reconciled, `1` one or more arithmetic differences
 
 ## WorkBuddy: what can be audited today
 
-[WorkBuddy's credit guide](https://www.workbuddy.ai/docs/workbuddy/credits) documents earliest-expiry-first deduction across credit packs, and its [Usage guide](https://www.workbuddy.ai/docs/workbuddy/usage) says users can inspect available and used credits. Its public documentation, checked 2026-11-06, does not establish a stable export schema or a complete formula for every task's credit debit. Thus the current tool can reconcile manually normalized WorkBuddy credit events and snapshots; it cannot independently reconstruct every WorkBuddy task's expected credit cost without more raw data. We will add a native importer only after validating a permitted, redacted real export.
+[WorkBuddy's credit guide](https://www.workbuddy.ai/docs/workbuddy/credits) documents earliest-expiry-first deduction across credit packs. One user-authorized XLSX export inspected on 2026-11-07 contained `RequestID`, `积分消耗`, `模型`, `使用端`, and `时间`; no balance, grants, expiry movements, token counts, or rate formula. **One export is not proof of a stable schema.** The importer rejects changed headers and reports only observed debits; it does not claim to reconstruct WorkBuddy's expected task cost or cash value.
+
+```bash
+python -m pip install '.[xlsx]'
+python -m credit_receipt workbuddy-import /private/request-usage.xlsx --utc-offset +08:00 --output-dir /private/workbuddy-import
+```
+
+Confirm the export's wall-clock UTC offset before running. The XLSX has no timezone marker; `+08:00` above is an example assumption, **not** a WorkBuddy guarantee. The command writes a private `summary.json` and normalized `events.csv` with synthetic row IDs rather than raw RequestIDs. Zero-credit requests are counted in the summary and omitted from debit events. Import success does not mean a balance audit passed. Keep the export and output outside this repository.
 
 See the [WorkBuddy evidence guide](docs/workbuddy.md) for the fields needed and the honest partial-audit path.
 
