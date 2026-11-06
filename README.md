@@ -43,7 +43,7 @@ The current version accepts **normalized user-owned records**. It does not claim
 2. **What did a task cost in credits?** For each debit, it finds the effective dated rule for each linked usage line, applies the explicit rounding rule, and compares the sum with the observed debit.
 3. **What was that worth in money or tokens?** A purchase's paid amount divided by its purchased credits is shown for that purchase only. Nonterminating ratios retain an exact fraction rather than a misleading rounded decimal. Subscription, promotional and purchased credits cannot be treated as a universal cash rate; task cash allocation needs a provider-confirmed spending bucket. Token counts require original model and token-usage records.
 
-Every calculation is conditional on the **completeness and accuracy of the files you supply**. The project checks arithmetic and rule matching; it does not authenticate a screenshot, verify the provider's complete history, or certify that a user-entered rule URL proves its rate. Keep a copy of the official statement and dated rate page when investigating a difference.
+Every calculation is conditional on the **completeness and accuracy of the files you supply**. The project checks arithmetic and rule matching; it does not authenticate a screenshot, verify the provider's complete history, certify that a user-entered rule URL proves its rate, or determine whether an expiry/refund event was permitted by the provider's policy. Keep a copy of the official statement and dated rate page when investigating a difference.
 
 ## Result meanings
 
