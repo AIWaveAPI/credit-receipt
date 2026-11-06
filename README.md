@@ -62,10 +62,10 @@ Process exit codes: `0` fully reconciled, `1` one or more arithmetic differences
 
 ```bash
 python -m pip install '.[xlsx]'
-python -m credit_receipt workbuddy-import /private/request-usage.xlsx --utc-offset +08:00 --output-dir /private/workbuddy-import
+python -m credit_receipt workbuddy-import /private/request-usage.xlsx --time-zone America/Los_Angeles --output-dir /private/workbuddy-import
 ```
 
-Confirm the export's wall-clock UTC offset before running. The XLSX has no timezone marker; `+08:00` above is an example assumption, **not** a WorkBuddy guarantee. The command writes a private `summary.json` and normalized `events.csv` with synthetic row IDs rather than raw RequestIDs. Zero-credit requests are counted in the summary and omitted from debit events. Import success does not mean a balance audit passed. Keep the export and output outside this repository.
+Confirm the export's time zone before running. The XLSX has no timezone marker; `America/Los_Angeles` above is an example assumption, **not** a WorkBuddy guarantee. Use an IANA time zone when records may cross daylight-saving changes. A fixed `--utc-offset` is available only when one offset is valid for the whole export. Ambiguous or nonexistent local times are rejected. The command writes a private `summary.json` and normalized `events.csv` with synthetic row IDs rather than raw RequestIDs. Zero-credit requests are counted in the summary and omitted from debit events. Import success does not mean a balance audit passed. Keep the export and output outside this repository.
 
 See the [WorkBuddy evidence guide](docs/workbuddy.md) for the fields needed and the honest partial-audit path.
 

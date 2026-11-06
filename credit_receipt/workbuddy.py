@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .input import InputError, MAX_FILE_BYTES, MAX_ROWS
 
@@ -52,9 +53,31 @@ def _cell(value: object, row: int, column: str) -> str:
     return text
 
 
-def read_workbuddy(path: str | Path, utc_offset: str) -> WorkBuddyImport:
+def _wall_time_to_utc(local_time: datetime, zone: timezone | ZoneInfo, row_number: int) -> datetime:
+    if isinstance(zone, ZoneInfo):
+        first = local_time.replace(tzinfo=zone, fold=0)
+        second = local_time.replace(tzinfo=zone, fold=1)
+        first_valid = first.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) == local_time
+        second_valid = second.astimezone(timezone.utc).astimezone(zone).replace(tzinfo=None) == local_time
+        if not first_valid and not second_valid:
+            raise InputError(f"row {row_number}: nonexistent wall time in selected time zone")
+        if first_valid and second_valid and first.utcoffset() != second.utcoffset():
+            raise InputError(f"row {row_number}: ambiguous wall time at daylight-saving transition")
+    return local_time.replace(tzinfo=zone).astimezone(timezone.utc)
+
+
+def read_workbuddy(path: str | Path, utc_offset: str | None = None, *,
+                   time_zone: str | None = None) -> WorkBuddyImport:
     """Read a five-column export without retaining request IDs or task text."""
-    offset = _offset(utc_offset)
+    if (utc_offset is None) == (time_zone is None):
+        raise InputError("choose exactly one of UTC offset or IANA time zone")
+    if time_zone is not None:
+        try:
+            zone = ZoneInfo(time_zone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise InputError("time zone unavailable; use an IANA name and install tzdata") from exc
+    else:
+        zone = _offset(utc_offset)
     source = Path(path)
     if source.suffix.lower() != ".xlsx":
         raise InputError("WorkBuddy import requires an .xlsx export")
@@ -123,7 +146,7 @@ def read_workbuddy(path: str | Path, utc_offset: str) -> WorkBuddyImport:
                 raise InputError(f"row {row_number}: invalid timestamp") from exc
             if local_time.tzinfo is not None:
                 raise InputError(f"row {row_number}: export timestamp must be timezone-naive")
-            utc_time = local_time.replace(tzinfo=offset).astimezone(timezone.utc)
+            utc_time = _wall_time_to_utc(local_time, zone, row_number)
             first = min(first, local_time) if first is not None else local_time
             last = max(last, local_time) if last is not None else local_time
             count += 1
@@ -146,6 +169,7 @@ def read_workbuddy(path: str | Path, utc_offset: str) -> WorkBuddyImport:
         summary = {
             "provider": "WorkBuddy", "schema": "observed-request-usage-xlsx-v1",
             "source_sha256": source_hash,
+            "time_zone_assumed": time_zone,
             "utc_offset_assumed": utc_offset,
             "source_wall_time_first": first.strftime("%Y-%m-%d %H:%M:%S"),
             "source_wall_time_last": last.strftime("%Y-%m-%d %H:%M:%S"),

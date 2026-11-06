@@ -24,12 +24,14 @@ def main(argv: list[str] | None = None) -> int:
     audit_command.add_argument("--output", type=Path, help="write detailed local JSON report")
     import_command = commands.add_parser("workbuddy-import", help="import a local WorkBuddy request-usage XLSX")
     import_command.add_argument("file", type=Path)
-    import_command.add_argument("--utc-offset", required=True, help="verified source wall-clock offset, e.g. +08:00")
+    time_group = import_command.add_mutually_exclusive_group(required=True)
+    time_group.add_argument("--utc-offset", help="fixed source wall-clock offset, e.g. +08:00")
+    time_group.add_argument("--time-zone", help="IANA time zone, e.g. America/Los_Angeles; handles DST")
     import_command.add_argument("--output-dir", required=True, type=Path, help="new private output directory")
     args = parser.parse_args(argv)
     try:
         if args.command == "workbuddy-import":
-            imported = read_workbuddy(args.file, args.utc_offset)
+            imported = read_workbuddy(args.file, args.utc_offset, time_zone=args.time_zone)
             target = args.output_dir.resolve()
             if target.exists():
                 raise InputError("output directory already exists; choose a new path")

@@ -75,6 +75,29 @@ class WorkBuddyImportTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "UTC offset"):
             read_workbuddy(self.source, "Asia/Shanghai")
 
+    def test_pacific_zone_applies_daylight_saving_transition(self):
+        self.rows = [
+            ["before", "1", "model-a", "WorkBuddy", "2026-10-31 12:00:00"],
+            ["after", "1", "model-a", "WorkBuddy", "2026-11-02 12:00:00"],
+        ]
+        self.write_book()
+        result = read_workbuddy(self.source, time_zone="America/Los_Angeles")
+        self.assertEqual([x["occurred_at"] for x in result.events],
+                         ["2026-10-31T19:00:00Z", "2026-11-02T20:00:00Z"])
+        self.assertEqual(result.summary["time_zone_assumed"], "America/Los_Angeles")
+
+    def test_ambiguous_pacific_wall_time_requires_more_evidence(self):
+        self.rows[0][4] = "2026-11-01 01:30:00"
+        self.write_book()
+        with self.assertRaisesRegex(InputError, "ambiguous"):
+            read_workbuddy(self.source, time_zone="America/Los_Angeles")
+
+    def test_nonexistent_pacific_wall_time_rejected(self):
+        self.rows[0][4] = "2026-03-08 02:30:00"
+        self.write_book()
+        with self.assertRaisesRegex(InputError, "nonexistent"):
+            read_workbuddy(self.source, time_zone="America/Los_Angeles")
+
     def test_cli_exports_private_normalized_events_without_request_ids(self):
         output = self.root / "private-output"
         result = subprocess.run([sys.executable, "-m", "credit_receipt", "workbuddy-import",

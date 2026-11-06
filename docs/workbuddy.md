@@ -12,7 +12,7 @@ Checked 2026-11-06 against WorkBuddy's [credits](https://www.workbuddy.ai/docs/w
 
 A user-authorized local `request-usage-2026-11-06.xlsx` had one worksheet and five columns: `RequestID`, `积分消耗`, `模型`, `使用端`, `时间`. In that sample, all request IDs were distinct, credit amounts were nonnegative, and timestamps were wall-clock strings without timezone information. The original workbook was not copied into this repository, and no real request ID or task content is published. This is **N=1**; future WorkBuddy exports may differ.
 
-`workbuddy-import` validates that exact header, rejects duplicate IDs, negative amounts, formulas, malformed timestamps, and oversized workbooks, then emits a local observed-debit summary and `events.csv`. It does not assert that zero-credit requests used zero tokens. The source offset must be provided explicitly. The offset is an interpretation of the workbook's wall-clock time, not a verified property of the file.
+`workbuddy-import` validates that exact header, rejects duplicate IDs, negative amounts, formulas, malformed timestamps, and oversized workbooks, then emits a local observed-debit summary and `events.csv`. It does not assert that zero-credit requests used zero tokens. The source time zone must be provided explicitly. For the first user-supplied export, the user confirmed `America/Los_Angeles`; this does not establish a WorkBuddy-wide time-zone rule. The exporter itself supplies no zone. The importer applies daylight-saving transitions and rejects ambiguous or nonexistent local times.
 
 ## What remains unverified
 
