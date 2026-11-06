@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "credit-receipt"
+version = "0.1.0"
+description = "Offline, evidence-backed reconciliation of AI platform credit ledgers"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [{name = "AIWaveAPI"}]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Office/Business :: Financial :: Accounting",
+]
+
+[project.scripts]
+credit-receipt = "credit_receipt.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["credit_receipt*"]

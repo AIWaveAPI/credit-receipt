@@ -1,0 +1,4 @@
+event_id,occurred_at,kind,delta_credits,source_ref,task_id,lot_id,paid_amount,paid_currency
+synthetic-purchase-1,2026-11-06T01:00:00Z,purchase,1000,synthetic-invoice-1,,synthetic-lot-1,10.00,USD
+synthetic-task-1,2026-11-06T02:00:00Z,debit,-60,synthetic-usage-1,synthetic-task-1,,,
+synthetic-task-2,2026-11-06T03:00:00Z,debit,-120,synthetic-usage-2,synthetic-task-2,,,

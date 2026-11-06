@@ -1,0 +1,12 @@
+[
+  {
+    "model": "gen-4.5",
+    "operation": "video_generation",
+    "unit": "second",
+    "credits_per_unit": "12",
+    "effective_from": "2026-11-06T00:00:00Z",
+    "rounding": "exact",
+    "source_url": "https://help.runwayml.com/hc/en-us/articles/15124877443219-How-do-credits-work",
+    "verified_at": "2026-11-06"
+  }
+]

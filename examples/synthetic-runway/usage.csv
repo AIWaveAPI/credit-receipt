@@ -1,0 +1,3 @@
+usage_id,event_id,model,operation,quantity,unit,source_ref
+synthetic-usage-1,synthetic-task-1,gen-4.5,video_generation,5,second,synthetic-usage-1
+synthetic-usage-2,synthetic-task-2,gen-4.5,video_generation,10,second,synthetic-usage-2
