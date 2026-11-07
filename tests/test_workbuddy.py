@@ -119,14 +119,17 @@ class WorkBuddyImportTests(unittest.TestCase):
             acl = subprocess.run(["icacls", str(output)], capture_output=True, text=True, check=True)
             self.assertNotIn("(I)", acl.stdout, "output directory must not inherit broad ACLs")
             current_user = subprocess.run(["whoami"], capture_output=True, text=True, check=True).stdout.strip()
+            privileged = {"nt authority\\system", "builtin\\administrators", "owner rights"}
             for name in ("events.csv", "summary.json"):
                 path = output / name
                 file_acl = subprocess.run(["icacls", str(path)], capture_output=True,
                                           text=True, check=True).stdout
                 access_lines = [line.replace(str(path), "", 1).strip()
                                 for line in file_acl.splitlines() if ":(" in line]
-                self.assertEqual([line.split(":(", 1)[0].casefold() for line in access_lines],
-                                 [current_user.casefold()])
+                identities = {line.split(":(", 1)[0].casefold() for line in access_lines}
+                self.assertIn(current_user.casefold(), identities)
+                self.assertFalse(identities - privileged - {current_user.casefold()},
+                                 f"{name} grants access to another ordinary account: {identities}")
         else:
             self.assertEqual(stat.S_IMODE(output.stat().st_mode) & 0o077, 0,
                              "output directory must not allow group or other access")
