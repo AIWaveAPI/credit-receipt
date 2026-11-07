@@ -1,14 +1,18 @@
 import csv
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from openpyxl import Workbook
 
 from credit_receipt.input import InputError
+from credit_receipt.cli import main
 from credit_receipt.workbuddy import read_workbuddy
 
 
@@ -111,6 +115,34 @@ class WorkBuddyImportTests(unittest.TestCase):
         self.assertEqual(summary["total_credits"], "1.20")
         self.assertNotIn("private-id", (output / "events.csv").read_text(encoding="utf-8"))
         self.assertEqual(events[0]["kind"], "debit")
+        if os.name == "nt":
+            acl = subprocess.run(["icacls", str(output)], capture_output=True, text=True, check=True)
+            self.assertNotIn("(I)", acl.stdout, "output directory must not inherit broad ACLs")
+            current_user = subprocess.run(["whoami"], capture_output=True, text=True, check=True).stdout.strip()
+            for name in ("events.csv", "summary.json"):
+                path = output / name
+                file_acl = subprocess.run(["icacls", str(path)], capture_output=True,
+                                          text=True, check=True).stdout
+                access_lines = [line.replace(str(path), "", 1).strip()
+                                for line in file_acl.splitlines() if ":(" in line]
+                self.assertEqual([line.split(":(", 1)[0].casefold() for line in access_lines],
+                                 [current_user.casefold()])
+        else:
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode) & 0o077, 0,
+                             "output directory must not allow group or other access")
+            for name in ("events.csv", "summary.json"):
+                self.assertEqual(stat.S_IMODE((output / name).stat().st_mode) & 0o077, 0,
+                                 f"{name} must not allow group or other access")
+
+    def test_permission_failure_publishes_no_usage_files(self):
+        output = self.root / "refused-output"
+        with mock.patch("credit_receipt.cli._secure_import_directory",
+                        side_effect=InputError("cannot secure private output")):
+            with mock.patch("sys.stderr"):
+                code = main(["workbuddy-import", str(self.source), "--utc-offset", "+08:00",
+                             "--output-dir", str(output)])
+        self.assertEqual(code, 2)
+        self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":

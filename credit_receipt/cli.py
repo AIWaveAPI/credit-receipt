@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -11,6 +12,26 @@ from pathlib import Path
 from .audit import audit
 from .input import InputError, load_bundle
 from .workbuddy import EVENT_FIELDS, read_workbuddy
+
+
+def _secure_import_directory(path: Path) -> None:
+    """Secure the empty staging directory before writing private usage facts."""
+    if os.name != "nt":
+        os.chmod(path, 0o700)
+        return
+    try:
+        user = subprocess.run(["whoami"], capture_output=True, text=True,
+                              timeout=10, check=True).stdout.strip()
+        if not user:
+            raise InputError("cannot identify the local Windows account")
+        result = subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)(F)"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode:
+            raise InputError("cannot secure the private output directory")
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise InputError("cannot secure the private output directory") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
             with tempfile.TemporaryDirectory(prefix=".credit-receipt-", dir=target.parent) as temporary:
                 staging = Path(temporary) / "result"
                 staging.mkdir()
+                _secure_import_directory(staging)
                 with (staging / "events.csv").open("w", encoding="utf-8", newline="") as handle:
                     writer = csv.DictWriter(handle, fieldnames=EVENT_FIELDS)
                     writer.writeheader()
@@ -46,6 +68,9 @@ def main(argv: list[str] | None = None) -> int:
                 (staging / "summary.json").write_text(
                     json.dumps(imported.summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
                 )
+                if os.name != "nt":
+                    os.chmod(staging / "events.csv", 0o600)
+                    os.chmod(staging / "summary.json", 0o600)
                 os.replace(staging, target)
             print(f"observed_only: {imported.summary['charged_requests']} charged, "
                   f"{imported.summary['zero_credit_requests']} zero-credit requests; "
