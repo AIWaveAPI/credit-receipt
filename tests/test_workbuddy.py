@@ -136,7 +136,7 @@ class WorkBuddyImportTests(unittest.TestCase):
 
     def test_permission_failure_publishes_no_usage_files(self):
         output = self.root / "refused-output"
-        with mock.patch("credit_receipt.cli._secure_import_directory",
+        with mock.patch("credit_receipt.cli._secure_private_path",
                         side_effect=InputError("cannot secure private output")):
             with mock.patch("sys.stderr"):
                 code = main(["workbuddy-import", str(self.source), "--utc-offset", "+08:00",

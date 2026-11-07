@@ -8,7 +8,8 @@ The repository's examples are synthetic. The tool does not verify that a user-su
 
 `workbuddy-import` restricts its new output directory before writing usage data:
 owner-only mode on POSIX, or a current-account-only inherited ACL on Windows.
-If it cannot apply that protection, it publishes no output directory. The
-source workbook and any parent directory are still your responsibility. The
-`audit --output` command may include user-supplied task IDs and source refs;
-choose a private destination and never commit those reports.
+`audit --output` secures its temporary report file before writing task IDs or
+source refs, then atomically replaces the requested output. A permission
+failure leaves any existing report unchanged. The source workbook, input files,
+parent directory, copies and backups are still your responsibility. Keep
+reports outside public repositories and never commit them.

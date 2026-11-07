@@ -1,6 +1,8 @@
 import csv
 import hashlib
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
@@ -10,6 +12,7 @@ from unittest.mock import patch
 
 import credit_receipt.input as input_module
 from credit_receipt.audit import audit
+from credit_receipt.cli import main
 from credit_receipt.input import InputError, load_bundle
 
 
@@ -129,6 +132,25 @@ class AuditTests(unittest.TestCase):
         report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "reconciled")
         self.assertEqual(report["input_sha256"]["events.csv"], load_bundle(self.root).hashes["events.csv"])
+        if os.name == "nt":
+            acl = subprocess.run(["icacls", str(output)], capture_output=True,
+                                 text=True, check=True).stdout
+            self.assertNotIn("(I)", acl, "report must not inherit broad ACLs")
+        else:
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode) & 0o077, 0,
+                             "report must not allow group or other access")
+
+    def test_report_permission_failure_preserves_existing_output(self):
+        output = self.root / "report.json"
+        original = b"existing private report\n"
+        output.write_bytes(original)
+        with patch("credit_receipt.cli._secure_private_path",
+                   side_effect=InputError("cannot secure private report")):
+            with patch("sys.stderr"):
+                code = main(["audit", str(self.root), "--output", str(output)])
+        self.assertEqual(code, 2)
+        self.assertEqual(output.read_bytes(), original)
+        self.assertEqual(list(self.root.glob(".credit-receipt-*.json")), [])
 
     def test_cli_difference_exit_code(self):
         self.events[1]["delta_credits"] = "-61"

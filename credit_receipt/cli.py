@@ -14,24 +14,25 @@ from .input import InputError, load_bundle
 from .workbuddy import EVENT_FIELDS, read_workbuddy
 
 
-def _secure_import_directory(path: Path) -> None:
-    """Secure the empty staging directory before writing private usage facts."""
+def _secure_private_path(path: Path, *, directory: bool) -> None:
+    """Restrict a new path before writing private accounting facts into it."""
     if os.name != "nt":
-        os.chmod(path, 0o700)
+        os.chmod(path, 0o700 if directory else 0o600)
         return
     try:
         user = subprocess.run(["whoami"], capture_output=True, text=True,
                               timeout=10, check=True).stdout.strip()
         if not user:
             raise InputError("cannot identify the local Windows account")
+        grant = f"{user}:(OI)(CI)(F)" if directory else f"{user}:(F)"
         result = subprocess.run(
-            ["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:(OI)(CI)(F)"],
+            ["icacls", str(path), "/inheritance:r", "/grant:r", grant],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode:
-            raise InputError("cannot secure the private output directory")
+            raise InputError("cannot secure the private output path")
     except (OSError, subprocess.SubprocessError) as exc:
-        raise InputError("cannot secure the private output directory") from exc
+        raise InputError("cannot secure the private output path") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             with tempfile.TemporaryDirectory(prefix=".credit-receipt-", dir=target.parent) as temporary:
                 staging = Path(temporary) / "result"
                 staging.mkdir()
-                _secure_import_directory(staging)
+                _secure_private_path(staging, directory=True)
                 with (staging / "events.csv").open("w", encoding="utf-8", newline="") as handle:
                     writer = csv.DictWriter(handle, fieldnames=EVENT_FIELDS)
                     writer.writeheader()
@@ -90,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
                                                  prefix=".credit-receipt-", suffix=".json",
                                                  delete=False) as handle:
                     pending = Path(handle.name)
+                    _secure_private_path(pending, directory=False)
                     json.dump(report, handle, indent=2, ensure_ascii=False)
                     handle.write("\n")
                     handle.flush()
