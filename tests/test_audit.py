@@ -1,5 +1,6 @@
 import csv
 import hashlib
+import io
 import json
 import os
 import stat
@@ -7,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,6 +89,18 @@ class AuditTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "duplicate event_id"):
             load_bundle(self.root)
 
+    def test_duplicate_event_id_error_does_not_print_private_value(self):
+        private = "private-customer-event-identifier"
+        self.events[0]["event_id"] = private
+        self.events.append({**self.events[0]})
+        self.save()
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("events.csv:4: duplicate event_id", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
+
     def test_naive_datetime_fails_closed(self):
         self.events[0]["occurred_at"] = "2026-11-06T01:00:00"
         self.save()
@@ -113,6 +127,17 @@ class AuditTests(unittest.TestCase):
         self.save()
         with self.assertRaisesRegex(InputError, "unknown debit"):
             load_bundle(self.root)
+
+    def test_unknown_usage_reference_error_does_not_print_private_value(self):
+        private = "private-customer-task-identifier"
+        self.usage[0]["event_id"] = private
+        self.save()
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("usage.csv:2: usage references unknown debit", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
 
     def test_decimal_precision_has_no_binary_float_error(self):
         self.rules[0]["credits_per_unit"] = "0.1"

@@ -161,7 +161,7 @@ def _unique(rows: list[tuple[int, dict[str, str]]], key: str, filename: str) -> 
     for number, row in rows:
         value = _text(row.get(key), f"{filename}:{number} {key}")
         if value in seen:
-            raise InputError(f"{filename}:{number}: duplicate {key}: {value}")
+            raise InputError(f"{filename}:{number}: duplicate {key}")
         seen.add(value)
 
 
@@ -222,7 +222,7 @@ def load_bundle(directory: str | Path) -> Bundle:
         label = f"usage.csv:{number}"
         event_id = _text(row["event_id"], f"{label} event_id")
         if event_id not in debit_ids:
-            raise InputError(f"{label}: usage references unknown debit: {event_id}")
+            raise InputError(f"{label}: usage references unknown debit")
         quantity = _decimal(row["quantity"], f"{label} quantity")
         if quantity <= 0:
             raise InputError(f"{label}: quantity must be positive")
