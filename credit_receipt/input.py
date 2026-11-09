@@ -141,7 +141,7 @@ def _csv(path: Path, raw: bytes, required: set[str], allowed: set[str]) -> list[
                 raise InputError(f"{path.name}: missing or duplicate header")
             missing, extra = required - set(reader.fieldnames), set(reader.fieldnames) - allowed
             if missing or extra:
-                raise InputError(f"{path.name}: missing={sorted(missing)} unexpected={sorted(extra)}")
+                raise InputError(f"{path.name}: missing={sorted(missing)} unexpected_count={len(extra)}")
             rows = []
             for number, row in enumerate(reader, start=2):
                 if number > MAX_ROWS + 1:

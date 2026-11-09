@@ -101,6 +101,18 @@ class AuditTests(unittest.TestCase):
         self.assertIn("events.csv:4: duplicate event_id", stderr.getvalue())
         self.assertNotIn(private, stderr.getvalue())
 
+    def test_unexpected_csv_header_does_not_print_private_value(self):
+        private = "private-customer-header-value"
+        path = self.root / "events.csv"
+        contents = path.read_text(encoding="utf-8")
+        path.write_text(contents.replace("source_ref,task_id", f"{private},task_id", 1), encoding="utf-8")
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("events.csv", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
+
     def test_naive_datetime_fails_closed(self):
         self.events[0]["occurred_at"] = "2026-11-06T01:00:00"
         self.save()
