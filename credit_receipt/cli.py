@@ -104,6 +104,11 @@ def main(argv: list[str] | None = None) -> int:
               f"{report['summary']['differences']} differences, "
               f"{report['summary']['incomplete_checks']} incomplete checks")
         return {"reconciled": 0, "differences_found": 1, "incomplete": 3}[report["status"]]
-    except (InputError, OSError) as exc:
+    except InputError as exc:
         print(f"credit-receipt: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        code = exc.errno if exc.errno is not None else "unknown"
+        print(f"credit-receipt: filesystem operation failed (errno {code}); check local paths and permissions",
+              file=sys.stderr)
         return 2

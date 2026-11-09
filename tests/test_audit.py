@@ -189,6 +189,19 @@ class AuditTests(unittest.TestCase):
         self.assertEqual(output.read_bytes(), original)
         self.assertEqual(list(self.root.glob(".credit-receipt-*.json")), [])
 
+    def test_filesystem_error_does_not_print_private_output_path(self):
+        private_name = "private-customer@example.invalid.json"
+        output = self.root / private_name
+        stderr = io.StringIO()
+        with patch("credit_receipt.cli.os.replace",
+                   side_effect=PermissionError(13, "permission denied", str(output))):
+            with redirect_stderr(stderr):
+                code = main(["audit", str(self.root), "--output", str(output)])
+        self.assertEqual(code, 2)
+        self.assertIn("filesystem operation failed", stderr.getvalue())
+        self.assertNotIn(private_name, stderr.getvalue())
+        self.assertFalse(output.exists())
+
     def test_cli_difference_exit_code(self):
         self.events[1]["delta_credits"] = "-61"
         self.save()
