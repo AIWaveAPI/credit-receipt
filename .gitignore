@@ -13,4 +13,8 @@ report.json
 summary.json
 *.csv
 *.xlsx
+opening.json
+rules.json
 !examples/synthetic-runway/*.csv
+!examples/synthetic-runway/opening.json
+!examples/synthetic-runway/rules.json

@@ -22,6 +22,8 @@ credit-receipt audit /path/to/your-local-records --output /path/to/private-repor
 ```
 
 Nothing is uploaded. The CLI does not log in, fetch rules, inspect browser storage, or use API keys. Keep your own inputs and output **outside the Git repository**: source references and task IDs in a report may still be sensitive.
+The repository ignores the standard ledger filenames as a precaution, but this
+does not protect renamed files, already tracked files, or a `git add -f`.
 
 ## What goes in
 
