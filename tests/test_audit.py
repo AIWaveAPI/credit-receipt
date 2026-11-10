@@ -1,15 +1,20 @@
 import csv
 import hashlib
+import io
 import json
+import os
+import stat
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
 
 import credit_receipt.input as input_module
 from credit_receipt.audit import audit
+from credit_receipt.cli import main
 from credit_receipt.input import InputError, load_bundle
 
 
@@ -84,6 +89,30 @@ class AuditTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "duplicate event_id"):
             load_bundle(self.root)
 
+    def test_duplicate_event_id_error_does_not_print_private_value(self):
+        private = "private-customer-event-identifier"
+        self.events[0]["event_id"] = private
+        self.events.append({**self.events[0]})
+        self.save()
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("events.csv:4: duplicate event_id", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
+
+    def test_unexpected_csv_header_does_not_print_private_value(self):
+        private = "private-customer-header-value"
+        path = self.root / "events.csv"
+        contents = path.read_text(encoding="utf-8")
+        path.write_text(contents.replace("source_ref,task_id", f"{private},task_id", 1), encoding="utf-8")
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("events.csv", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
+
     def test_naive_datetime_fails_closed(self):
         self.events[0]["occurred_at"] = "2026-11-06T01:00:00"
         self.save()
@@ -111,6 +140,17 @@ class AuditTests(unittest.TestCase):
         with self.assertRaisesRegex(InputError, "unknown debit"):
             load_bundle(self.root)
 
+    def test_unknown_usage_reference_error_does_not_print_private_value(self):
+        private = "private-customer-task-identifier"
+        self.usage[0]["event_id"] = private
+        self.save()
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            result = main(["audit", str(self.root)])
+        self.assertEqual(result, 2)
+        self.assertIn("usage.csv:2: usage references unknown debit", stderr.getvalue())
+        self.assertNotIn(private, stderr.getvalue())
+
     def test_decimal_precision_has_no_binary_float_error(self):
         self.rules[0]["credits_per_unit"] = "0.1"
         self.usage[0]["quantity"] = "3"
@@ -129,6 +169,38 @@ class AuditTests(unittest.TestCase):
         report = json.loads(output.read_text(encoding="utf-8"))
         self.assertEqual(report["status"], "reconciled")
         self.assertEqual(report["input_sha256"]["events.csv"], load_bundle(self.root).hashes["events.csv"])
+        if os.name == "nt":
+            acl = subprocess.run(["icacls", str(output)], capture_output=True,
+                                 text=True, check=True).stdout
+            self.assertNotIn("(I)", acl, "report must not inherit broad ACLs")
+        else:
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode) & 0o077, 0,
+                             "report must not allow group or other access")
+
+    def test_report_permission_failure_preserves_existing_output(self):
+        output = self.root / "report.json"
+        original = b"existing private report\n"
+        output.write_bytes(original)
+        with patch("credit_receipt.cli._secure_private_path",
+                   side_effect=InputError("cannot secure private report")):
+            with patch("sys.stderr"):
+                code = main(["audit", str(self.root), "--output", str(output)])
+        self.assertEqual(code, 2)
+        self.assertEqual(output.read_bytes(), original)
+        self.assertEqual(list(self.root.glob(".credit-receipt-*.json")), [])
+
+    def test_filesystem_error_does_not_print_private_output_path(self):
+        private_name = "private-customer@example.invalid.json"
+        output = self.root / private_name
+        stderr = io.StringIO()
+        with patch("credit_receipt.cli.os.replace",
+                   side_effect=PermissionError(13, "permission denied", str(output))):
+            with redirect_stderr(stderr):
+                code = main(["audit", str(self.root), "--output", str(output)])
+        self.assertEqual(code, 2)
+        self.assertIn("filesystem operation failed", stderr.getvalue())
+        self.assertNotIn(private_name, stderr.getvalue())
+        self.assertFalse(output.exists())
 
     def test_cli_difference_exit_code(self):
         self.events[1]["delta_credits"] = "-61"

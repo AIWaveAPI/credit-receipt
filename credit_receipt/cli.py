@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -11,6 +12,27 @@ from pathlib import Path
 from .audit import audit
 from .input import InputError, load_bundle
 from .workbuddy import EVENT_FIELDS, read_workbuddy
+
+
+def _secure_private_path(path: Path, *, directory: bool) -> None:
+    """Restrict a new path before writing private accounting facts into it."""
+    if os.name != "nt":
+        os.chmod(path, 0o700 if directory else 0o600)
+        return
+    try:
+        user = subprocess.run(["whoami"], capture_output=True, text=True,
+                              timeout=10, check=True).stdout.strip()
+        if not user:
+            raise InputError("cannot identify the local Windows account")
+        grant = f"{user}:(OI)(CI)(F)" if directory else f"{user}:(F)"
+        result = subprocess.run(
+            ["icacls", str(path), "/inheritance:r", "/grant:r", grant],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode:
+            raise InputError("cannot secure the private output path")
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise InputError("cannot secure the private output path") from exc
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
             with tempfile.TemporaryDirectory(prefix=".credit-receipt-", dir=target.parent) as temporary:
                 staging = Path(temporary) / "result"
                 staging.mkdir()
+                _secure_private_path(staging, directory=True)
                 with (staging / "events.csv").open("w", encoding="utf-8", newline="") as handle:
                     writer = csv.DictWriter(handle, fieldnames=EVENT_FIELDS)
                     writer.writeheader()
@@ -46,6 +69,9 @@ def main(argv: list[str] | None = None) -> int:
                 (staging / "summary.json").write_text(
                     json.dumps(imported.summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
                 )
+                if os.name != "nt":
+                    os.chmod(staging / "events.csv", 0o600)
+                    os.chmod(staging / "summary.json", 0o600)
                 os.replace(staging, target)
             print(f"observed_only: {imported.summary['charged_requests']} charged, "
                   f"{imported.summary['zero_credit_requests']} zero-credit requests; "
@@ -65,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
                                                  prefix=".credit-receipt-", suffix=".json",
                                                  delete=False) as handle:
                     pending = Path(handle.name)
+                    _secure_private_path(pending, directory=False)
                     json.dump(report, handle, indent=2, ensure_ascii=False)
                     handle.write("\n")
                     handle.flush()
@@ -77,6 +104,11 @@ def main(argv: list[str] | None = None) -> int:
               f"{report['summary']['differences']} differences, "
               f"{report['summary']['incomplete_checks']} incomplete checks")
         return {"reconciled": 0, "differences_found": 1, "incomplete": 3}[report["status"]]
-    except (InputError, OSError) as exc:
+    except InputError as exc:
         print(f"credit-receipt: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        code = exc.errno if exc.errno is not None else "unknown"
+        print(f"credit-receipt: filesystem operation failed (errno {code}); check local paths and permissions",
+              file=sys.stderr)
         return 2
